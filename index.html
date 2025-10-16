@@ -1,0 +1,429 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Doodle Board</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            overflow: hidden; /* Prevent scrollbars */
+            margin: 0;
+            background: linear-gradient(180deg, #001020, #000510);
+            font-family: sans-serif;
+            color: white;
+            height: 100vh;
+            width: 100vw;
+            user-select: none; /* Prevent text selection */
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+
+        .star {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            opacity: 0.8;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            animation: twinkle 2s infinite, pulse 3s infinite;
+        }
+
+        .star:hover {
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+        }
+
+        .line {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.3);
+            z-index: 1;
+            pointer-events: none; /* Allow clicks to pass through */
+            animation: glow 2s infinite;
+        }
+
+        @keyframes twinkle {
+            0% { opacity: 0.8; }
+            50% { opacity: 0.2; }
+            100% { opacity: 0.8; }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes glow {
+            0% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.3); }
+            50% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.6); }
+            100% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.3); }
+        }
+
+        .cursor-trail {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.4);
+            pointer-events: none;
+            z-index: 2;
+            animation: cursorTrail 0.1s ease-out;
+        }
+
+        @keyframes cursorTrail {
+            0% { transform: scale(1); opacity: 0.4; }
+            100% { transform: scale(0.1); opacity: 0; }
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            pointer-events: none; /* Allow clicks to pass through */
+        }
+
+        #overlay * {
+            pointer-events: auto; /* Re-enable pointer events for specific elements */
+        }
+
+        #title {
+            font-size: 2rem;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+            animation: fadeIn 3s forwards;
+            pointer-events: none;
+        }
+
+        @keyframes fadeIn {
+            0% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        #controls {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            pointer-events: none;
+        }
+
+        .control-button {
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        .control-button:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        #color-theme-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            pointer-events: none;
+        }
+
+         /* Example shooting star */
+         .shooting-star {
+            position: absolute;
+            background: linear-gradient(to right, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.1));
+            width: 100px;
+            height: 2px;
+            border-radius: 1px;
+            z-index: 0;
+            animation: shootingStar 4s linear infinite;
+        }
+
+        @keyframes shootingStar {
+            0% {
+                transform: translate(0, 0) rotate(30deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(100vw, 100vh) rotate(30deg);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="overlay">
+        <div id="title">Draw your own cosmos ✨</div>
+        <div id="controls">
+            <div>
+                <span id="star-count">⭐ 0 stars</span>
+            </div>
+            <div>
+                <button class="control-button" id="clear-button">Clear (Space)</button>
+            </div>
+        </div>
+        <div id="color-theme-indicator"></div>
+    </div>
+    <div id="cursor-trail-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const starCountElement = document.getElementById('star-count');
+        const clearButton = document.getElementById('clear-button');
+        const colorThemeIndicator = document.getElementById('color-theme-indicator');
+        const cursorTrailContainer = document.getElementById('cursor-trail-container');
+        let stars = [];
+        let lines = [];
+        let drawing = false;
+        let currentColorIndex = 0;
+        const colorThemes = [
+            ['#B388FF', '#8C7AE8', '#6750A4', '#4A148C'], // Cosmic Purple
+            ['#0096FF', '#0077B6', '#00539C', '#003F88'], // Ocean Blue
+            ['#FFAB91', '#FF8A65', '#FF7043', '#FF5722'], // Sunset Pink
+            ['#FFC107', '#FFB300', '#FFA000', '#FF8F00']  // Golden
+        ];
+        let starCount = 0;
+        let cursorTrail = [];
+        let shootingStars = [];
+
+        // Helper function to generate a random number within a range
+        function getRandom(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        // Helper function to get a random color from the current theme
+        function getRandomColor() {
+            const theme = colorThemes[currentColorIndex];
+            return theme[Math.floor(Math.random() * theme.length)];
+        }
+
+        // Initialize canvas size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Function to create a star
+        function createStar(x, y) {
+            const star = document.createElement('div');
+            star.classList.add('star');
+            star.style.left = `${x}px`;
+            star.style.top = `${y}px`;
+            star.style.backgroundColor = getRandomColor();
+            star.style.animationDelay = `${Math.random() * 2}s`; // Stagger twinkle animation
+
+            // Add hover effect
+            star.addEventListener('mouseover', () => {
+                star.style.boxShadow = '0 0 20px rgba(255, 255, 255, 0.8)';
+            });
+            star.addEventListener('mouseout', () => {
+                star.style.boxShadow = '0 0 10px rgba(255, 255, 255, 0.5)';
+            });
+
+            document.body.appendChild(star);
+            stars.push(star);
+            starCount++;
+            starCountElement.textContent = `⭐ ${starCount} stars`;
+        }
+
+        // Function to create a line
+        function createLine(x1, y1, x2, y2) {
+            const line = document.createElement('div');
+            line.classList.add('line');
+            const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            line.style.width = `${length}px`;
+            line.style.left = `${x1}px`;
+            line.style.top = `${y1}px`;
+            line.style.transform = `rotate(${angle}rad)`;
+            line.style.transformOrigin = '0 0';
+            line.style.backgroundColor =  `rgba(255, 255, 255, 0.3)`; // Consistent glow color
+            document.body.appendChild(line);
+            lines.push(line);
+        }
+
+        // Function to clear the canvas
+        function clearCanvas(explode = false) {
+            stars.forEach(star => star.remove());
+            lines.forEach(line => line.remove());
+            stars = [];
+            lines = [];
+            starCount = 0;
+            starCountElement.textContent = `⭐ ${starCount} stars`;
+            if (explode) {
+                // Explosion animation
+                for (let i = 0; i < 50; i++) {
+                    const x = canvas.width / 2;
+                    const y = canvas.height / 2;
+                    const angle = Math.random() * 2 * Math.PI;
+                    const speed = Math.random() * 5 + 2;
+                    const star = document.createElement('div');
+                    star.classList.add('star');
+                    star.style.left = `${x}px`;
+                    star.style.top = `${y}px`;
+                    star.style.backgroundColor = getRandomColor();
+                    star.style.width = '5px';
+                    star.style.height = '5px';
+                    star.style.animation = 'none'; // Disable standard animations during explosion
+                    document.body.appendChild(star);
+                    stars.push(star);
+
+                    // Explosion animation
+                    const dx = Math.cos(angle) * speed;
+                    const dy = Math.sin(angle) * speed;
+                    let startTime = null;
+
+                    function animateExplosion(timestamp) {
+                        if (!startTime) startTime = timestamp;
+                        const progress = timestamp - startTime;
+                        star.style.left = `${x + dx * progress / 5}px`;
+                        star.style.top = `${y + dy * progress / 5}px`;
+
+                        if (progress < 500) { // Explosion duration in milliseconds
+                            requestAnimationFrame(animateExplosion);
+                        } else {
+                            star.remove();
+                            stars = stars.filter(s => s !== star);
+                        }
+                    }
+                    requestAnimationFrame(animateExplosion);
+                }
+            }
+        }
+
+
+        // Function to update the color theme indicator
+        function updateColorThemeIndicator() {
+            const theme = colorThemes[currentColorIndex];
+            colorThemeIndicator.style.backgroundColor = theme[0];
+        }
+
+        updateColorThemeIndicator();
+
+        // Event listeners for drawing
+        let currentStars = [];
+        let currentStartX, currentStartY; // Store starting coordinates for line creation
+
+        canvas.addEventListener('mousedown', (e) => {
+            drawing = true;
+            currentStars = []; // Reset stars for each new constellation
+            currentStartX = e.clientX;
+            currentStartY = e.clientY;
+            createStar(e.clientX, e.clientY);
+            currentStars.push({ x: e.clientX, y: e.clientY }); // Store initial star position
+        });
+
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!drawing) return;
+            createStar(e.clientX, e.clientY);
+            currentStars.push({ x: e.clientX, y: e.clientY });
+
+            // Create lines between the last two stars
+            if (currentStars.length > 1) {
+                const startStar = currentStars[currentStars.length - 2];
+                createLine(startStar.x, startStar.y, e.clientX, e.clientY);
+            }
+
+            //Cursor trail
+            const trail = document.createElement('div');
+            trail.classList.add('cursor-trail');
+            trail.style.left = `${e.clientX}px`;
+            trail.style.top = `${e.clientY}px`;
+            cursorTrailContainer.appendChild(trail);
+
+            // Limited trail
+            setTimeout(() => {
+                trail.remove();
+            }, 200);
+        });
+
+
+        canvas.addEventListener('mouseup', () => {
+            drawing = false;
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            drawing = false;
+        });
+
+        // Event listeners for controls
+        clearButton.addEventListener('click', () => {
+            clearCanvas(true);
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                clearCanvas(true);
+            } else if (e.code === 'KeyC') {
+                currentColorIndex = (currentColorIndex + 1) % colorThemes.length;
+                updateColorThemeIndicator();
+            }
+        });
+
+        // Example Shooting Star (optional)
+        function createShootingStar() {
+            const star = document.createElement('div');
+            star.classList.add('shooting-star');
+            star.style.left = `${Math.random() * window.innerWidth}px`;
+            star.style.top = `${Math.random() * window.innerHeight}px`;
+            document.body.appendChild(star);
+            shootingStars.push(star);
+
+            // Remove after animation
+            setTimeout(() => {
+                star.remove();
+                shootingStars = shootingStars.filter(s => s !== star);
+            }, 4000);
+        }
+
+        // Create shooting stars periodically
+        setInterval(createShootingStar, 5000);
+
+        //Initial Example (Big Dipper)
+        function drawBigDipper() {
+            const bigDipperCoords = [
+                { x: canvas.width * 0.2, y: canvas.height * 0.2 },
+                { x: canvas.width * 0.3, y: canvas.height * 0.15 },
+                { x: canvas.width * 0.45, y: canvas.height * 0.2 },
+                { x: canvas.width * 0.55, y: canvas.height * 0.3 },
+                { x: canvas.width * 0.65, y: canvas.height * 0.4 },
+                { x: canvas.width * 0.7, y: canvas.height * 0.55 },
+                { x: canvas.width * 0.6, y: canvas.height * 0.65 }
+            ];
+
+            for (let i = 0; i < bigDipperCoords.length; i++) {
+                setTimeout(() => {
+                    createStar(bigDipperCoords[i].x, bigDipperCoords[i].y);
+                    if (i > 0) {
+                        createLine(bigDipperCoords[i - 1].x, bigDipperCoords[i - 1].y, bigDipperCoords[i].x, bigDipperCoords[i].y);
+                    }
+                }, i * 200); // Stagger star creation for visual effect
+            }
+        }
+
+        setTimeout(drawBigDipper, 1000);
+
+    </script>
+</body>
+</html>
